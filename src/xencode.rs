@@ -18,11 +18,11 @@ fn u32_array_to_u8_array(content: &[u32]) -> Vec<u8> {
 fn xencode(message: &mut Vec<u32>, key: &[u32]) {
     let n: u32 = (message.len() - 1).try_into().unwrap();
     let mut z: u32 = message[n as usize];
-    let mut y = message[0];
-    let mut c: u32 = 0x9e3779b9;
-    let mut m = 0;
-    let mut e = 0;
-    let mut p: u32 = 0;
+    let mut y;
+    let c: u32 = 0x9e3779b9;
+    let mut m;
+    let mut e;
+    let mut p: u32;
     let mut q = 6 + 52 / (n + 1);
     let mut d: u32 = 0;
     while 0 < q {

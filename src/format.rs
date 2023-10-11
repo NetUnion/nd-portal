@@ -31,7 +31,6 @@ fn test_info() {
     use crate::tests::test_content::{ChallengeResponse, LoginData, LoginRequest};
     let username = LoginData::default().username;
     let password = LoginData::default().password;
-    let hmac = crate::hmac::hmac_md5(&ChallengeResponse::default().challenge, &password);
     let ip = LoginRequest::default().ip;
     let ac_id = LoginRequest::default().ac_id.to_string();
     let info = get_info(&username, &password, &ip, &ac_id, &ChallengeResponse::default().challenge);
