@@ -23,15 +23,11 @@ mod state;
 mod tests;
 mod xencode;
 
-// clap config
-// --ip(-i) <ip> : ip address, can be omitted
-// --username(-u) <username> : username
-// --password(-p) <password> : password
-
 #[derive(Parser, Debug)]
 #[command(
     author = "fx Lingyi <pure@01fx.icu>",
-    about = "A command line tool for SRUN authentication"
+    about = "A command line tool for SRun authentication",
+    version = env!("CARGO_PKG_VERSION"),
 )]
 struct Opts {
     #[arg(long)]
