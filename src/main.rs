@@ -47,36 +47,45 @@ async fn main() -> Result<()> {
             .prompt()
             .context("Failed to get password.")?,
     };
-    let input_ip: Option<IpAddr> = match opts.ip {
+    let ip: Option<IpAddr> = match opts.ip {
         Some(i) => i
             .parse::<IpAddr>()
             .and_then(|x| Ok(Some(x)))
             .context("Failed to parse input IP address."),
         None => Ok(None),
     }?;
-    let client = create_client(input_ip, DEFAULT_UA)?;
-    let ip = get_ip(&client, &opts.host).await?;
-    let client = match input_ip {
-        Some(i) => if i.to_string() != ip {
-            println!("Warning: Your IP address is not the same as the one we got from the server! Using the one got from the server.");
-            create_client(ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
+
+    login(&opts.username, &password, &opts.host, ip).await?;
+    println!("Login successfully.");
+    Ok(())
+}
+
+async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -> Result<()> {
+    let client = create_client(ip, DEFAULT_UA)?;
+    let real_ip = get_ip(&client, host).await?;
+    let client = match ip {
+        Some(i) => if i.to_string() != real_ip {
+            println!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
+            create_client(real_ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
         } else {
             client
         },
         _ => client,
     };
-    let state = state::PreparedState::new(&opts.host, &opts.username, &password, &ip);
+
+    let state = state::PreparedState::new(host, username, password, &real_ip);
     let challenge = {
         let request = state.to_get_challenge_request(&client);
         let response = request.send().await?;
         let challenge: ChallengeString = response.text().await?.parse()?;
         challenge
     };
+
     let state = state.with_challenge(&challenge);
     let request = state.to_login_request(&client);
     let response = request.send().await?;
     let body = response.text().await?;
     parse_login_response(&body)?;
-    println!("Login successfully.");
+    
     Ok(())
 }
