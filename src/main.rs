@@ -1,3 +1,5 @@
+use std::net::IpAddr;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use format::DEFAULT_UA;
@@ -32,21 +34,37 @@ struct Opts {
     username: String,
     #[arg(long)]
     password: Option<String>,
+    #[arg(long)]
+    ip: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-    let ip = get_ip(&opts.host)
-        .await
-        .context("Failed to get online IP.")?;
     let password = match opts.password {
         Some(p) => p,
         None => Password::new("Password")
             .prompt()
             .context("Failed to get password.")?,
     };
-    let client = create_client(None, DEFAULT_UA)?;
+    let input_ip: Option<IpAddr> = match opts.ip {
+        Some(i) => i
+            .parse::<IpAddr>()
+            .and_then(|x| Ok(Some(x)))
+            .context("Failed to parse input IP address."),
+        None => Ok(None),
+    }?;
+    let client = create_client(input_ip, DEFAULT_UA)?;
+    let ip = get_ip(&client, &opts.host).await?;
+    let client = match input_ip {
+        Some(i) => if i.to_string() != ip {
+            println!("Warning: Your IP address is not the same as the one we got from the server! Using the one got from the server.");
+            create_client(ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
+        } else {
+            client
+        },
+        _ => client,
+    };
     let state = state::PreparedState::new(&opts.host, &opts.username, &password, &ip);
     let challenge = {
         let request = state.to_get_challenge_request(&client);
@@ -63,8 +81,8 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn get_ip(host: &str) -> Result<String> {
-    let res = reqwest::Client::new()
+async fn get_ip(client: &reqwest::Client, host: &str) -> Result<String> {
+    let res = client
         .get(format!(
             "http://{}/cgi-bin/rad_user_info?callback=nd_portal&_={}",
             host,
