@@ -2,13 +2,18 @@ use std::net::IpAddr;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use client::get_ip_from_interface_name;
 use format::DEFAULT_UA;
 use inquire::Password;
 
-use crate::{client::{create_client, get_ip}, response::{ChallengeString, parse_login_response}};
+use crate::{
+    client::{create_client, get_ip},
+    response::{parse_login_response, ChallengeString},
+};
 
 mod base64;
 mod client;
+mod config;
 mod format;
 mod hmac;
 mod response;
@@ -29,34 +34,61 @@ mod xencode;
 )]
 struct Opts {
     #[arg(long)]
-    host: String,
+    host: Option<String>,
     #[arg(long)]
-    username: String,
+    username: Option<String>,
     #[arg(long)]
     password: Option<String>,
     #[arg(long)]
     ip: Option<String>,
+    #[arg(long, short)]
+    config: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let opts: Opts = Opts::parse();
-    let password = match opts.password {
-        Some(p) => p,
-        None => Password::new("Password")
-            .prompt()
-            .context("Failed to get password.")?,
-    };
-    let ip: Option<IpAddr> = match opts.ip {
-        Some(i) => i
-            .parse::<IpAddr>()
-            .and_then(|x| Ok(Some(x)))
-            .context("Failed to parse input IP address."),
-        None => Ok(None),
-    }?;
+    if let Some(config) = opts.config {
+        let config = config::read_from_file(&config)?;
+        for item in config {
+            let ip = match item.ip {
+                Some(i) => i
+                    .parse::<IpAddr>()
+                    .context("Failed to parse input IP address."),
+                None => get_ip_from_interface_name(&item.interface.unwrap()),
+            }?;
+            login(&item.username, &item.password, &item.host, Some(ip)).await?;
+        }
+    } else {
+        let host = match opts.host {
+            Some(h) => h,
+            None => inquire::Text::new("Host")
+                .prompt()
+                .context("Failed to get host.")?,
+        };
+        let username = match opts.username {
+            Some(u) => u,
+            None => inquire::Text::new("Username")
+                .prompt()
+                .context("Failed to get username.")?,
+        };
+        let password = match opts.password {
+            Some(p) => p,
+            None => Password::new("Password")
+                .prompt()
+                .context("Failed to get password.")?,
+        };
+        let ip: Option<IpAddr> = match opts.ip {
+            Some(i) => i
+                .parse::<IpAddr>()
+                .and_then(|x| Ok(Some(x)))
+                .context("Failed to parse input IP address."),
+            None => Ok(None),
+        }?;
 
-    login(&opts.username, &password, &opts.host, ip).await?;
-    println!("Login successfully.");
+        login(&username, &password, &host, ip).await?;
+        println!("Login successfully.");
+    }
     Ok(())
 }
 
@@ -64,12 +96,14 @@ async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -
     let client = create_client(ip, DEFAULT_UA)?;
     let real_ip = get_ip(&client, host).await?;
     let client = match ip {
-        Some(i) => if i.to_string() != real_ip {
-            println!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
-            create_client(real_ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
-        } else {
-            client
-        },
+        Some(i) => {
+            if i.to_string() != real_ip {
+                println!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
+                create_client(real_ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
+            } else {
+                client
+            }
+        }
         _ => client,
     };
 
@@ -86,6 +120,6 @@ async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -
     let response = request.send().await?;
     let body = response.text().await?;
     parse_login_response(&body)?;
-    
+
     Ok(())
 }

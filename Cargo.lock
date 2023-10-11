@@ -728,6 +728,7 @@ dependencies = [
  "network-interface",
  "once_cell",
  "reqwest",
+ "serde",
  "serde_json",
  "serde_qs",
  "sha1",

@@ -1,0 +1,4 @@
+[
+    { "username": "xxx", "password": "xxx", "host": "xxx.xxx.xxx.xxx", "interface": "vEthernet xxx" },
+    { "username": "xxx", "password": "xxx", "host": "xxx.xxx.xxx.xxx", "ip": "xxx.xxx.xxx.xxx" }
+]

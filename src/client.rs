@@ -1,9 +1,13 @@
 use std::net::IpAddr;
 
+use network_interface::NetworkInterfaceConfig;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use reqwest::{Client, ClientBuilder};
 
-pub(crate) fn create_client(local_ip: Option<IpAddr>, user_agent: &str) -> Result<Client, reqwest::Error> {
+pub(crate) fn create_client(
+    local_ip: Option<IpAddr>,
+    user_agent: &str,
+) -> Result<Client, reqwest::Error> {
     let mut headers = HeaderMap::new();
     headers.insert(USER_AGENT, HeaderValue::from_str(user_agent).unwrap());
     ClientBuilder::new()
@@ -29,4 +33,23 @@ pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Resu
         println!("Info: You have already logged in.");
     }
     Ok(json["online_ip"].as_str().unwrap().to_string())
+}
+
+pub(crate) fn get_ip_from_interface_name(interface: &str) -> anyhow::Result<IpAddr> {
+    let interfaces = network_interface::NetworkInterface::show()?;
+    let interface = interfaces
+        .into_iter()
+        .filter(|i| i.name == interface);
+    if interface.clone().count() == 0 {
+        return Err(anyhow::anyhow!("No such interface."));
+    }
+    let interface = interface.map(|i| i.addr).flatten().filter(|a| a.ip().is_ipv4()).collect::<Vec<_>>();
+    for ip in &interface {
+        println!("Info: Using IP address {}.", ip.ip());
+    }
+    if interface.is_empty() {
+        return Err(anyhow::anyhow!("No IPv4 address found."));
+    } else {
+        Ok(interface[0].ip())
+    }
 }
