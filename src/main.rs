@@ -5,7 +5,7 @@ use clap::Parser;
 use format::DEFAULT_UA;
 use inquire::Password;
 
-use crate::{client::create_client, response::ChallengeString};
+use crate::{client::{create_client, get_ip}, response::{ChallengeString, parse_login_response}};
 
 mod base64;
 mod client;
@@ -79,36 +79,4 @@ async fn main() -> Result<()> {
     parse_login_response(&body)?;
     println!("Login successfully.");
     Ok(())
-}
-
-async fn get_ip(client: &reqwest::Client, host: &str) -> Result<String> {
-    let res = client
-        .get(format!(
-            "http://{}/cgi-bin/rad_user_info?callback=nd_portal&_={}",
-            host,
-            chrono::Local::now().timestamp_millis()
-        ))
-        .header(reqwest::header::USER_AGENT, DEFAULT_UA)
-        .send()
-        .await?;
-    let body = res.text().await?;
-    let body = body.trim_start_matches("nd_portal(").trim_end_matches(')');
-    let json: serde_json::Value = serde_json::from_str(body)?;
-    if json["error"].as_str().unwrap() == "ok" {
-        println!("Info: You have already logged in.");
-    }
-    Ok(json["online_ip"].as_str().unwrap().to_string())
-}
-
-fn parse_login_response(body: &str) -> Result<()> {
-    let body = body.trim_start_matches("nd_portal(").trim_end_matches(')');
-    let json: serde_json::Value = serde_json::from_str(body)?;
-    if &json["error"].as_str().unwrap() == &"ok" {
-        Ok(())
-    } else {
-        Err(anyhow::anyhow!(json["error_msg"]
-            .as_str()
-            .unwrap()
-            .to_string()))
-    }
 }
