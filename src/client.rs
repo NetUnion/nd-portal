@@ -1,3 +1,4 @@
+use log::{trace, warn};
 use std::net::IpAddr;
 
 use network_interface::NetworkInterfaceConfig;
@@ -27,12 +28,14 @@ pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Resu
         .send()
         .await?;
     let body = res.text().await?;
+    trace!("Get IP response: {}", body);
     let body = body.trim_start_matches("nd_portal(").trim_end_matches(')');
     let json: serde_json::Value = serde_json::from_str(body)?;
+    let ip = json["online_ip"].as_str().unwrap().to_string();
     if json["error"].as_str().unwrap() == "ok" {
-        println!("Info: You have already logged in.");
+        warn!("IP address {} is already logged in!", ip);
     }
-    Ok(json["online_ip"].as_str().unwrap().to_string())
+    Ok(ip)
 }
 
 pub(crate) fn get_ip_from_interface_name(interface: &str) -> anyhow::Result<IpAddr> {
@@ -44,9 +47,6 @@ pub(crate) fn get_ip_from_interface_name(interface: &str) -> anyhow::Result<IpAd
         return Err(anyhow::anyhow!("No such interface."));
     }
     let interface = interface.map(|i| i.addr).flatten().filter(|a| a.ip().is_ipv4()).collect::<Vec<_>>();
-    for ip in &interface {
-        println!("Info: Using IP address {}.", ip.ip());
-    }
     if interface.is_empty() {
         return Err(anyhow::anyhow!("No IPv4 address found."));
     } else {

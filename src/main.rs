@@ -1,3 +1,4 @@
+use log::{info, warn, error};
 use std::net::IpAddr;
 
 use anyhow::{Context, Result};
@@ -47,18 +48,11 @@ struct Opts {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    env_logger::init();
+
     let opts: Opts = Opts::parse();
     if let Some(config) = opts.config {
-        let config = config::read_from_file(&config)?;
-        for item in config {
-            let ip = match item.ip {
-                Some(i) => i
-                    .parse::<IpAddr>()
-                    .context("Failed to parse input IP address."),
-                None => get_ip_from_interface_name(&item.interface.unwrap()),
-            }?;
-            login(&item.username, &item.password, &item.host, Some(ip)).await?;
-        }
+        config_login(&config).await?;
     } else {
         let host = match opts.host {
             Some(h) => h,
@@ -87,7 +81,44 @@ async fn main() -> Result<()> {
         }?;
 
         login(&username, &password, &host, ip).await?;
-        println!("Login successfully.");
+        info!("Login successfully.");
+    }
+    Ok(())
+}
+
+async fn config_login(config_path: &str) -> Result<()> {
+    let futures: Vec<_> = config::read_from_file(config_path)?
+        .iter()
+        .map(|item| -> Result<_> {
+            let username = item.username.clone();
+            let password = item.password.clone();
+            let host = item.host.clone();
+            let ip = match &item.ip {
+                Some(i) => i
+                    .parse::<IpAddr>()
+                    .context("Failed to parse input IP address."),
+                None => get_ip_from_interface_name(&item.interface.clone().unwrap()), // TODO: meaningless clone
+            }?;
+            Ok(tokio::spawn(async move {
+                login(&username, &password, &host, Some(ip)).await
+            }))
+        })
+        .collect();
+
+    for future in futures {
+        match future {
+            Err(e) => {
+                error!("Error while creating task: {}", e);
+            }
+            Ok(f) => match f.await? {
+                Err(e) => {
+                    error!("Error while executing task: {}", e);
+                }
+                Ok(()) => {
+                    info!("Login successfully.");
+                }
+            },
+        }
     }
     Ok(())
 }
@@ -98,7 +129,7 @@ async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -
     let client = match ip {
         Some(i) => {
             if i.to_string() != real_ip {
-                println!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
+                warn!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
                 create_client(real_ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
             } else {
                 client

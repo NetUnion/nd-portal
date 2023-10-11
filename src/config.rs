@@ -1,3 +1,4 @@
+use log::trace;
 use std::fs::File;
 
 use anyhow::{Context, Result};
@@ -13,10 +14,13 @@ pub(crate) struct ConfigItem {
 }
 
 pub(crate) fn read_from_file(path: &str) -> Result<Vec<ConfigItem>> {
+    trace!("Reading config file from {}.", path);
+
     let file = File::open(path).context("Failed to open config file.")?;
     let config: Vec<ConfigItem> =
         serde_json::from_reader(file).context("Failed to parse config file.")?;
     for item in &config {
+        trace!("Username of config item: {}.", item.username);
         if item.username.is_empty() {
             return Err(anyhow::anyhow!("Empty username."));
         }
@@ -33,5 +37,7 @@ pub(crate) fn read_from_file(path: &str) -> Result<Vec<ConfigItem>> {
             return Err(anyhow::anyhow!("Neither ip nor interface is specified."));
         }
     }
+
+    trace!("Config file readed. Length: {}", config.len());
     Ok(config)
 }
