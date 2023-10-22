@@ -1,4 +1,4 @@
-use log::{trace, warn};
+use log::{trace, warn, debug};
 use std::net::IpAddr;
 
 use network_interface::NetworkInterfaceConfig;
@@ -38,11 +38,12 @@ pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Resu
     Ok(ip)
 }
 
-pub(crate) fn get_ip_from_interface_name(interface: &str) -> anyhow::Result<IpAddr> {
+pub(crate) fn get_ip_from_interface_name(interface_name: &str) -> anyhow::Result<IpAddr> {
+    trace!("Obtain IP address for {}", interface_name);
     let interfaces = network_interface::NetworkInterface::show()?;
     let interface = interfaces
         .into_iter()
-        .filter(|i| i.name == interface);
+        .filter(|i| i.name == interface_name);
     if interface.clone().count() == 0 {
         return Err(anyhow::anyhow!("No such interface."));
     }
@@ -50,6 +51,7 @@ pub(crate) fn get_ip_from_interface_name(interface: &str) -> anyhow::Result<IpAd
     if interface.is_empty() {
         return Err(anyhow::anyhow!("No IPv4 address found."));
     } else {
+        debug!("IP address of '{}' is {}", interface_name, interface[0].ip());
         Ok(interface[0].ip())
     }
 }
