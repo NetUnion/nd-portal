@@ -1,4 +1,4 @@
-use log::{info, warn, error};
+use log::{debug, error, info, warn};
 use std::net::IpAddr;
 
 use anyhow::{Context, Result};
@@ -122,17 +122,11 @@ async fn config_login(config_path: &str) -> Result<()> {
 async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -> Result<()> {
     let client = create_client(ip, DEFAULT_UA)?;
     let real_ip = get_ip(&client, host).await?;
-    let client = match ip {
-        Some(i) => {
-            if i.to_string() != real_ip {
-                warn!("Warning: Your IP address ({}) is not the same as the one we got from the server! Using the one got from the server.", i);
-                create_client(real_ip.parse::<IpAddr>()?.into(), DEFAULT_UA)?
-            } else {
-                client
-            }
-        }
-        _ => client,
-    };
+    debug!(
+        "Real IP address of {}: {}",
+        ip.map(|x| x.to_string()).unwrap_or_else(|| "<none>".into()),
+        real_ip
+    );
 
     let state = state::PreparedState::new(host, username, password, &real_ip);
     let challenge = {
