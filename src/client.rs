@@ -17,7 +17,7 @@ pub(crate) fn create_client(
         .build()
 }
 
-pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Result<String> {
+pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Result<(String, bool)> {
     let res = client
         .get(format!(
             "http://{}/cgi-bin/rad_user_info?callback=nd_portal&_={}",
@@ -34,8 +34,10 @@ pub(crate) async fn get_ip(client: &reqwest::Client, host: &str) -> anyhow::Resu
     let ip = json["online_ip"].as_str().unwrap().to_string();
     if json["error"].as_str().unwrap() == "ok" {
         warn!("IP address {} is already logged in!", ip);
+        Ok((ip, true))
+    } else {
+        Ok((ip, false))
     }
-    Ok(ip)
 }
 
 pub(crate) fn get_ip_from_interface_name(interface_name: &str) -> anyhow::Result<IpAddr> {

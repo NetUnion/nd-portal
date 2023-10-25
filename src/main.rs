@@ -40,6 +40,8 @@ struct Opts {
     ip: Option<String>,
     #[arg(long, short)]
     config: Option<String>,
+    #[arg(long, short)]
+    force: Option<bool>,
 }
 
 #[tokio::main]
@@ -48,7 +50,7 @@ async fn main() -> Result<()> {
 
     let opts: Opts = Opts::parse();
     if let Some(config) = opts.config {
-        config_login(&config).await?;
+        config_login(&config, opts.force.unwrap_or(true)).await?;
     } else {
         let host = match opts.host {
             Some(h) => h,
@@ -76,13 +78,13 @@ async fn main() -> Result<()> {
             None => Ok(None),
         }?;
 
-        login(&username, &password, &host, ip).await?;
+        login(&username, &password, &host, ip, opts.force.unwrap_or(true)).await?;
         info!("Login successfully.");
     }
     Ok(())
 }
 
-async fn config_login(config_path: &str) -> Result<()> {
+async fn config_login(config_path: &str, force: bool) -> Result<()> {
     let futures: Vec<_> = config::read_from_file(config_path)?
         .iter()
         .map(|item| -> Result<_> {
@@ -96,7 +98,7 @@ async fn config_login(config_path: &str) -> Result<()> {
                 None => get_ip_from_interface_name(&item.interface.clone().unwrap()), // TODO: meaningless clone
             }?;
             Ok(tokio::spawn(async move {
-                login(&username, &password, &host, Some(ip)).await
+                login(&username, &password, &host, Some(ip), force).await
             }))
         })
         .collect();
@@ -119,9 +121,13 @@ async fn config_login(config_path: &str) -> Result<()> {
     Ok(())
 }
 
-async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>) -> Result<()> {
+async fn login(username: &str, password: &str, host: &str, ip: Option<IpAddr>, force: bool) -> Result<()> {
     let client = create_client(ip, DEFAULT_UA)?;
-    let real_ip = get_ip(&client, host).await?;
+    let (real_ip, logged_in) = get_ip(&client, host).await?;
+    if logged_in && !force {
+        info!("Already logged in.");
+        return Ok(())
+    }
     debug!(
         "Real IP address of {}: {}",
         ip.map(|x| x.to_string()).unwrap_or_else(|| "<none>".into()),
